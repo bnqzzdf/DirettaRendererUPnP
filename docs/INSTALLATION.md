@@ -156,7 +156,7 @@ pkg-config --modversion libupnp
 
 ### 1. Get the SDK
 
-1. **Visit**: https://www.diretta.link
+1. **Visit**: https://www.diretta.link/hostsdk.html
 2. **Navigate to**: "Download Preview" section
 3. **Download**: DirettaHostSDK_147.tar.gz (or latest version)
 
@@ -191,7 +191,7 @@ source ~/.bashrc
 
 ```bash
 cd ~/audio-projects
-git clone https://github.com/YOUR_USERNAME/DirettaUPnPRenderer.git
+git clone https://github.com/cometdom/DirettaUPnPRenderer.git
 cd DirettaUPnPRenderer
 ```
 
