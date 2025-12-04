@@ -88,8 +88,8 @@ sudo apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev 
 ### 3. Build the Renderer
 
 ```bash
-git clone https://github.com/cometdom/DirettaUPnPRenderer.git
-cd DirettaUPnPRenderer
+git clone https://github.com/cometdom/DirettaRendererUPnP.git
+cd DirettaRendererUPnP
 make
 ```
 

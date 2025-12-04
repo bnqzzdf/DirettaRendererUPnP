@@ -191,8 +191,8 @@ source ~/.bashrc
 
 ```bash
 cd ~/audio-projects
-git clone https://github.com/cometdom/DirettaUPnPRenderer.git
-cd DirettaUPnPRenderer
+git clone https://github.com/cometdom/DirettaRendererUPnP.git
+cd DirettaRendererUPnP
 ```
 
 ### 2. Configure Makefile
