@@ -74,7 +74,7 @@ This document provides guidelines for contributing to the project.
 # Install dependencies (Fedora example)
 sudo dnf install git gcc-c++ make ffmpeg-devel libupnp-devel
 
-# Download Diretta SDK from https://www.diretta.link
+# Download Diretta SDK from https://www.diretta.link/hostsdk.html
 # Extract to ~/DirettaHostSDK_147/
 ```
 

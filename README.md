@@ -56,7 +56,7 @@ This renderer combines the best of both worlds:
 
 ### Software
 - **Linux** (Fedora, AudioLinux, Ubuntu, or similar)
-- **Diretta Host SDK** v1.47+ (download from [diretta.link](https://www.diretta.link))
+- **Diretta Host SDK** v147+ (download from [diretta.link](https://www.diretta.link/hostsdk.html))
 - **FFmpeg** development libraries
 - **libupnp** development library
 
@@ -76,7 +76,7 @@ sudo apt install libavformat-dev libavcodec-dev libavutil-dev libswresample-dev 
 
 ### 2. Download Diretta SDK
 
-1. Visit **https://www.diretta.link**
+1. Visit **https://www.diretta.link/hostsdk.html**
 2. Go to **"Download Preview"** section
 3. Download **DirettaHostSDK_147.tar.gz**
 4. Extract to home directory:
