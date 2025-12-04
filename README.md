@@ -103,7 +103,7 @@ sudo ip link set enp4s0 mtu 9000
 ### 5. Run
 
 ```bash
-sudo ./bin/DirettaRendererComplete --port 4005 --buffer 2.0
+sudo ./bin/DirettaRendererUPnP --port 4005 --buffer 2.0
 ```
 
 ### 6. Connect & Play
@@ -136,7 +136,7 @@ Options:
   --no-gapless         Disable gapless playback
 
 Example:
-  sudo ./DirettaRendererComplete --port 4005 --buffer 2.0 --name "Living Room"
+  sudo ./DirettaRendererUPnP --port 4005 --buffer 2.0 --name "Living Room"
 ```
 
 ---
@@ -288,7 +288,7 @@ sudo firewall-cmd --reload
 
 ```bash
 # Increase buffer
-sudo ./DirettaRendererComplete --buffer 3.0
+sudo ./DirettaRendererUPnP --buffer 3.0
 
 # Check network
 ip -s link show enp4s0  # Look for errors

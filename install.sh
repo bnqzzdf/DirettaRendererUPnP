@@ -257,7 +257,7 @@ read -p "Create systemd service for auto-start? [y/N]: " CREATE_SERVICE
 
 if [[ "$CREATE_SERVICE" =~ ^[Yy]$ ]]; then
     SERVICE_FILE="/etc/systemd/system/diretta-renderer.service"
-    BIN_PATH="$(pwd)/bin/DirettaRendererComplete"
+    BIN_PATH="$(pwd)/bin/DirettaRendererUPnP"
     
     sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
@@ -300,7 +300,7 @@ print_success "Diretta UPnP Renderer is ready to use!"
 echo ""
 echo "Quick Start:"
 echo "  1. Start the renderer:"
-echo "     sudo ./bin/DirettaRendererComplete --port 4005 --buffer 2.0"
+echo "     sudo ./bin/DirettaRendererUPnP --port 4005 --buffer 2.0"
 echo ""
 echo "  2. Or use systemd service:"
 echo "     sudo systemctl start diretta-renderer"
