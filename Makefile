@@ -20,7 +20,7 @@ ifeq ($(UNAME_M),x86_64)
     DIRETTA_ARCH = x64
     ARCH_DESC = x86_64 (Intel/AMD 64-bit)
 else ifeq ($(UNAME_M),aarch64)
-    DIRETTA_ARCH = arm64
+    DIRETTA_ARCH = aarch64
     ARCH_DESC = ARM64 (Raspberry Pi 4, etc.)
 else ifeq ($(UNAME_M),armv7l)
     DIRETTA_ARCH = arm
@@ -75,8 +75,8 @@ endif
 # ============================================
 
 # Diretta library naming pattern: libDirettaHost_<arch>-linux-15v3.so
-DIRETTA_LIB_NAME = libDirettaHost_$(DIRETTA_ARCH)-linux-15v3.a
-ACQUA_LIB_NAME = libACQUA_$(DIRETTA_ARCH)-linux-15v3.a
+DIRETTA_LIB_NAME = libDirettaHost_$(DIRETTA_ARCH)-linux-15.a
+ACQUA_LIB_NAME = libACQUA_$(DIRETTA_ARCH)-linux-15.a
 
 # Full paths to libraries
 SDK_LIB_DIRETTA = $(SDK_PATH)/lib/$(DIRETTA_LIB_NAME)
@@ -134,7 +134,7 @@ LIBS = \
     -lupnp \
     -lixml \
     -lpthread \
-    -lDirettaHost_$(DIRETTA_ARCH)-linux-15v3 \
+    -lDirettaHost_$(DIRETTA_ARCH)-linux-15 \
     -lavformat \
     -lavcodec \
     -lavutil \
@@ -142,7 +142,7 @@ LIBS = \
 
 # Add ACQUA library if it exists
 ifneq (,$(wildcard $(SDK_LIB_ACQUA)))
-    LIBS += -lACQUA_$(DIRETTA_ARCH)-linux-15v3
+    LIBS += -lACQUA_$(DIRETTA_ARCH)-linux-15
     $(info ✓ ACQUA library will be linked)
 endif
 
