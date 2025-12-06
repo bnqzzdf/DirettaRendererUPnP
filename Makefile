@@ -75,8 +75,18 @@ endif
 # ============================================
 
 # Diretta library naming pattern: libDirettaHost_<arch>-linux-15v3.so
-DIRETTA_LIB_NAME = libDirettaHost_$(DIRETTA_ARCH)-linux-15.a
-ACQUA_LIB_NAME = libACQUA_$(DIRETTA_ARCH)-linux-15.a
+# Only x86_64 and aarch64 are supported
+ifeq ($(DIRETTA_ARCH),x64)
+    DIRETTA_LIB_NAME = libDirettaHost_$(DIRETTA_ARCH)-linux-15v3.a
+    ACQUA_LIB_NAME = libACQUA_$(DIRETTA_ARCH)-linux-15v3.a
+    DIRETTA_LIB_SUFFIX = 15v3
+else ifeq ($(DIRETTA_ARCH),aarch64)
+    DIRETTA_LIB_NAME = libDirettaHost_$(DIRETTA_ARCH)-linux-15.a
+    ACQUA_LIB_NAME = libACQUA_$(DIRETTA_ARCH)-linux-15.a
+    DIRETTA_LIB_SUFFIX = 15
+else
+    $(error ❌ Unsupported architecture for library linking: $(DIRETTA_ARCH). Only x64 (x86_64) and aarch64 are supported.)
+endif
 
 # Full paths to libraries
 SDK_LIB_DIRETTA = $(SDK_PATH)/lib/$(DIRETTA_LIB_NAME)
@@ -134,7 +144,7 @@ LIBS = \
     -lupnp \
     -lixml \
     -lpthread \
-    -lDirettaHost_$(DIRETTA_ARCH)-linux-15 \
+    -lDirettaHost_$(DIRETTA_ARCH)-linux-$(DIRETTA_LIB_SUFFIX) \
     -lavformat \
     -lavcodec \
     -lavutil \
@@ -142,7 +152,7 @@ LIBS = \
 
 # Add ACQUA library if it exists
 ifneq (,$(wildcard $(SDK_LIB_ACQUA)))
-    LIBS += -lACQUA_$(DIRETTA_ARCH)-linux-15
+    LIBS += -lACQUA_$(DIRETTA_ARCH)-linux-$(DIRETTA_LIB_SUFFIX)
     $(info ✓ ACQUA library will be linked)
 endif
 
