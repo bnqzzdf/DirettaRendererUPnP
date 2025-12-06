@@ -18,29 +18,22 @@ LDFLAGS = -pthread
 # ============================================
 # Manual Override Option
 # ============================================
-# If ARCH_NAME is provided, use it directly
-# Example: make ARCH_NAME=aarch64-linux-15
 
-ifdef ARCH_NAME
-    $(info ════════════════════════════════════════════════════════)
-    $(info   MANUAL OVERRIDE ENABLED)
-    $(info ════════════════════════════════════════════════════════)
-    $(info Using provided ARCH_NAME: $(ARCH_NAME))
-    
-    # Extract base architecture from ARCH_NAME for library linking
-    ifeq ($(findstring x64,$(ARCH_NAME)),x64)
-        BASE_ARCH = x64
-    else ifeq ($(findstring aarch64,$(ARCH_NAME)),aarch64)
-        BASE_ARCH = aarch64
-    else ifeq ($(findstring riscv64,$(ARCH_NAME)),riscv64)
-        BASE_ARCH = riscv64
-    else
-        $(error Unable to determine architecture from ARCH_NAME=$(ARCH_NAME))
-    endif
-    
-    FULL_VARIANT = $(ARCH_NAME)
-    ARCH_DESC = Manual override: $(ARCH_NAME)
-    
+UNAME_M := $(shell uname -m)
+
+# Map uname output to Diretta library architecture
+ifeq ($(UNAME_M),x86_64)
+    DIRETTA_ARCH = x64
+    ARCH_DESC = x86_64 (Intel/AMD 64-bit)
+else ifeq ($(UNAME_M),aarch64)
+    DIRETTA_ARCH = aarch64
+    ARCH_DESC = ARM64 (Raspberry Pi 4, etc.)
+else ifeq ($(UNAME_M),armv7l)
+    DIRETTA_ARCH = arm
+    ARCH_DESC = ARM 32-bit (Raspberry Pi 3, etc.)
+else ifeq ($(UNAME_M),arm64)
+    DIRETTA_ARCH = arm64
+    ARCH_DESC = ARM64 (Apple Silicon, etc.)
 else
     # ============================================
     # Automatic Architecture Detection
@@ -184,6 +177,21 @@ endif
 # Verify SDK Installation
 # ============================================
 
+# Diretta library naming pattern: libDirettaHost_<arch>-linux-15v3.so
+# Only x86_64 and aarch64 are supported
+ifeq ($(DIRETTA_ARCH),x64)
+    DIRETTA_LIB_NAME = libDirettaHost_$(DIRETTA_ARCH)-linux-15v3.a
+    ACQUA_LIB_NAME = libACQUA_$(DIRETTA_ARCH)-linux-15v3.a
+    DIRETTA_LIB_SUFFIX = 15v3
+else ifeq ($(DIRETTA_ARCH),aarch64)
+    DIRETTA_LIB_NAME = libDirettaHost_$(DIRETTA_ARCH)-linux-15.a
+    ACQUA_LIB_NAME = libACQUA_$(DIRETTA_ARCH)-linux-15.a
+    DIRETTA_LIB_SUFFIX = 15
+else
+    $(error ❌ Unsupported architecture for library linking: $(DIRETTA_ARCH). Only x64 (x86_64) and aarch64 are supported.)
+endif
+
+# Full paths to libraries
 SDK_LIB_DIRETTA = $(SDK_PATH)/lib/$(DIRETTA_LIB_NAME)
 SDK_LIB_ACQUA = $(SDK_PATH)/lib/$(ACQUA_LIB_NAME)
 
@@ -245,14 +253,15 @@ LIBS = \
     -lupnp \
     -lixml \
     -lpthread \
-    -lDirettaHost_$(FULL_VARIANT)$(NOLOG_SUFFIX) \
+    -lDirettaHost_$(DIRETTA_ARCH)-linux-$(DIRETTA_LIB_SUFFIX) \
     -lavformat \
     -lavcodec \
     -lavutil \
     -lswresample
 
 ifneq (,$(wildcard $(SDK_LIB_ACQUA)))
-    LIBS += -lACQUA_$(FULL_VARIANT)$(NOLOG_SUFFIX)
+    LIBS += -lACQUA_$(DIRETTA_ARCH)-linux-$(DIRETTA_LIB_SUFFIX)
+    $(info ✓ ACQUA library will be linked)
 endif
 
 # ============================================
