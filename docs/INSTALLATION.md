@@ -12,6 +12,7 @@ Complete step-by-step installation guide for the Diretta UPnP Renderer.
 6. [Network Configuration](#network-configuration)
 7. [First Run](#first-run)
 8. [Creating a Systemd Service](#creating-a-systemd-service)
+9. [Listing and Selecting Diretta Targets](#listing-and-selecting-diretta-targets)
 
 ---
 
@@ -359,39 +360,31 @@ Press `Ctrl+C` to stop gracefully.
 
 ## Creating a Systemd Service
 
-To run the renderer automatically at boot:
+To simplify deployment, this project provides a helper script `generate_service.sh` that creates a ready-to-use systemd service.
 
-### 1. Create Service File
+### 1. Generate the Service File
+
+From the project root directory:
 
 ```bash
-sudo nano /etc/systemd/system/diretta-renderer.service
+# Make the script executable
+chmod +x ./generate_service.sh
+
+# Generate the service with default parameters
+# - TARGET_INDEX=1 (first Diretta target)
+# - UPNP_PORT=4005
+# - BUFFER_SECS=2.0
+sudo ./generate_service.sh
+
+# Or override parameters in one line
+sudo TARGET_INDEX=2 UPNP_PORT=4005 BUFFER_SECS=2.0 ./generate_service.sh
 ```
 
-Content:
+This will create `/etc/systemd/system/diretta-renderer.service` with a command similar to:
+
 ```ini
-[Unit]
-Description=Diretta UPnP Renderer
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/home/YOUR_USERNAME/DirettaRendererUPnP/bin
-ExecStart=/home/YOUR_USERNAME/DirettaRendererUPnP/bin/DirettaRendererUPnP --port 4005 --buffer 2.0
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-# Network capabilities
-AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
-
-[Install]
-WantedBy=multi-user.target
+ExecStart=/root/diretta/DirettaRendererUPnP/bin/DirettaRendererUPnP --target 1 --port 4005 --buffer 2.0
 ```
-
-**Important**: Replace `YOUR_USERNAME` with your actual username!
 
 ### 2. Enable and Start Service
 
@@ -424,7 +417,60 @@ sudo journalctl -u diretta-renderer --since today
 
 ---
 
-## Optimization Tips
+## Listing and Selecting Diretta Targets
+
+Before running the renderer as a service, it is recommended to scan the network and identify available Diretta targets.
+
+### 1. List Available Targets
+
+From the project root (or any directory containing the built binary):
+
+```bash
+sudo ./bin/DirettaRendererUPnP --list-targets
+```
+
+Example output:
+
+```text
+[1] Target #1
+    IP Address: fe80::5c53:8aff:fefb:f63a,19644
+    MTU: 1500 bytes
+
+[2] Target #2
+    IP Address: fe80::5c53:8aff:fefb:f63a,19646
+    MTU: 1500 bytes
+
+[3] Target #3
+    IP Address: fe80::5c53:8aff:fefb:f63a,19648
+    MTU: 1500 bytes
+```
+
+Here:
+
+- `Target #1 / #2 / #3` are internal indices used by the renderer
+- `IP Address` and `MTU` can help you distinguish different Diretta devices
+
+### 2. Select a Target by Index
+
+Once you know which target you want to use, you can pass its index to the renderer:
+
+```bash
+# Run directly in foreground
+sudo ./bin/DirettaRendererUPnP --target 1 --port 4005 --buffer 2.0
+```
+
+When using the systemd service, the same index is passed via `generate_service.sh`:
+
+```bash
+sudo TARGET_INDEX=1 ./generate_service.sh
+sudo systemctl daemon-reload
+sudo systemctl restart diretta-renderer
+```
+
+If `--target` is not specified and only one Diretta target is found, the renderer will automatically use it.
+If multiple targets are detected without a specified index, the renderer may enter interactive selection mode.
+
+---
 
 ### 1. CPU Performance Mode
 

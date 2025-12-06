@@ -291,6 +291,61 @@ Ensure your **Diretta Target** (Memory Play, GentooPlayer, etc.) is:
 - Connected to your DAC (USB/I2S/SPDIF)
 - Configured to accept Diretta connections
 
+### List Diretta Targets
+Before starting the renderer, you can scan for Diretta target devices on the current network:
+
+```bash
+sudo ./bin/DirettaRendererUPnP --list-targets
+```
+
+Example output:
+
+text
+[1] Target #1
+    IP Address: fe80::5c53:8aff:fefb:f63a,19644
+    MTU: 1500 bytes
+
+[2] Target #2
+    IP Address: fe80::5c53:8aff:fefb:f63a,19646
+    MTU: 1500 bytes
+
+[3] Target #3
+    IP Address: fe80::5c53:8aff:fefb:f63a,19648
+    MTU: 1500 bytes
+Where:
+[1] / [2] / [3] are internal Target indices.
+
+IP Address and MTU can be used to distinguish between different Diretta devices. 
+**To be improved:** Currently cannot output user-friendly target names.
+
+### Select Diretta Target
+
+Based on the output of `--list-targets`, you can select a specific Diretta Target by its index.
+
+Syntax:
+
+```bash
+sudo ./bin/DirettaRendererUPnP --target <index> [other_parameters]
+```
+
+Examples:
+
+Use the first Target:
+
+```bash
+sudo ./bin/DirettaRendererUPnP --target 1
+```
+
+Use with port, buffer, and other parameters:
+
+```bash
+sudo ./bin/DirettaRendererUPnP --target 2 --port 4005 --buffer 2.0
+```
+Notes:
+<index> starts from 1, corresponding to the [1] [2] [3] ... shown in the --list-targets output.
+If --target is not specified and there is only one Diretta Target detected on the network, it will be used automatically.
+
+
 ### 7. Connect from Control Point
 
 Open your UPnP control point (JPlay, BubbleUPnP, etc.) and look for "Diretta Renderer" in available devices.
