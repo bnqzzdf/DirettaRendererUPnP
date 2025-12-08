@@ -571,7 +571,7 @@ section below.
 
 If you find this renderer valuable, you can support development:
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/cometdomi)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/cometdom)
 
 **Important notes:**
 - ✅ Donations are **optional** and appreciated
