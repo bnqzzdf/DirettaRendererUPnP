@@ -20,6 +20,7 @@ public:
         bool gaplessEnabled;
         int bufferSeconds;
         int targetIndex;  // -1 = interactive selection, >= 0 = specific target
+        uint32_t mtu;     // 0 = auto-detect, > 0 = manual setting
         
         Config();
     };
@@ -53,7 +54,7 @@ private:
     
     // Configuration
     Config m_config;
-    uint32_t m_networkMTU = 16128;  // ⭐ MTU hardcodé pour performance maximale
+    uint32_t m_networkMTU;  // Actual MTU used (auto-detected or manually set)
     
     // Components
     std::unique_ptr<UPnPDevice> m_upnp;

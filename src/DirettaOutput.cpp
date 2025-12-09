@@ -41,6 +41,69 @@ void DirettaOutput::setMTU(uint32_t mtu) {
     std::cout << std::endl;
 }
 
+bool DirettaOutput::detectAndSetMTU(uint32_t& detectedMTU) {
+    if (m_connected) {
+        std::cerr << "[DirettaOutput] ⚠️  Cannot detect MTU while connected" << std::endl;
+        return false;
+    }
+    
+    // Create Find instance to measure MTU
+    DIRETTA::Find::Setting findSetting;
+    findSetting.Loopback = false;
+    findSetting.ProductID = 0;
+    
+    DIRETTA::Find find(findSetting);
+    
+    if (!find.open()) {
+        std::cerr << "[DirettaOutput] ⚠️  Failed to open Find for MTU detection" << std::endl;
+        return false;
+    }
+    
+    // Get targets to find the IP address
+    DIRETTA::Find::PortResalts targets;
+    if (!find.findOutput(targets)) {
+        std::cerr << "[DirettaOutput] ⚠️  No targets found for MTU detection" << std::endl;
+        return false;
+    }
+    
+    if (targets.empty()) {
+        std::cerr << "[DirettaOutput] ⚠️  No Diretta targets available" << std::endl;
+        return false;
+    }
+    
+    // Get the target address (use first target or configured target)
+    ACQUA::IPAddress targetAddr;
+    if (m_targetIndex >= 0 && m_targetIndex < static_cast<int>(targets.size())) {
+        // Use configured target index
+        auto it = targets.begin();
+        std::advance(it, m_targetIndex);
+        targetAddr = it->first;
+    } else {
+        // Use first target
+        targetAddr = targets.begin()->first;
+    }
+    
+    // Measure MTU using SDK's measSendMTU function
+    uint32_t measuredMTU = 0;
+    if (!find.measSendMTU(targetAddr, measuredMTU)) {
+        std::cerr << "[DirettaOutput] ⚠️  MTU measurement failed" << std::endl;
+        return false;
+    }
+    
+    // Set the detected MTU
+    detectedMTU = measuredMTU;
+    m_mtu = measuredMTU;
+    m_mtuManuallySet = false;  // Mark as auto-detected
+    
+    std::cout << "[DirettaOutput] ✓ MTU measurement successful";
+    if (measuredMTU > 1500) {
+        std::cout << " (jumbo frames supported)";
+    }
+    std::cout << std::endl;
+    
+    return true;
+}
+
 
 
 bool DirettaOutput::open(const AudioFormat& format, int bufferSeconds) {

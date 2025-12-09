@@ -77,6 +77,14 @@ DirettaRenderer::Config parseArguments(int argc, char* argv[]) {
                 exit(1);
             }
         }
+        else if ((arg == "--mtu" || arg == "-m") && i + 1 < argc) {
+            config.mtu = std::atoi(argv[++i]);
+            if (config.mtu != 0 && config.mtu < 1280) {
+                std::cerr << "❌ Invalid MTU. Must be 0 (auto) or >= 1280" << std::endl;
+                std::cerr << "   Common values: 1500 (standard), 9000 (jumbo), 16128 (super jumbo)" << std::endl;
+                exit(1);
+            }
+        }
         else if (arg == "--list-targets" || arg == "-l") {
             listTargets();
             exit(0);
@@ -91,6 +99,7 @@ DirettaRenderer::Config parseArguments(int argc, char* argv[]) {
                       << "  --no-gapless          Disable gapless playback\n"
                       << "  --buffer, -b <secs>   Buffer size in seconds (default: 10)\n"
                       << "  --target, -t <index>  Select Diretta target by index (1, 2, 3...)\n"
+                      << "  --mtu, -m <bytes>     Network MTU (0=auto, 1500=standard, 9000=jumbo, 16128=super)\n"
                       << "  --list-targets, -l    List available Diretta targets and exit\n"
                       << "  --help, -h            Show this help\n"
                       << "\nTarget Selection:\n"

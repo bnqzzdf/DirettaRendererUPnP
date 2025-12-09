@@ -48,6 +48,7 @@ static std::string generateUUID() {
 DirettaRenderer::Config::Config() {
     uuid = generateUUID();
     targetIndex = -1;  // Default: interactive selection
+    mtu = 0;           // Default: auto-detect
 }
 
 // ============================================================================
@@ -56,6 +57,7 @@ DirettaRenderer::Config::Config() {
 
 DirettaRenderer::DirettaRenderer(const Config& config)
     : m_config(config)
+    , m_networkMTU(0)  // Will be set in start()
     , m_running(false)
 {
     std::cout << "[DirettaRenderer] Created" << std::endl;
@@ -127,10 +129,29 @@ bool DirettaRenderer::start() {
         std::cout << "[DirettaRenderer] ✓ Diretta Target verified and ready" << std::endl;
         std::cout << "[DirettaRenderer] " << std::endl;
         
-        // Configure MTU
-        if (m_networkMTU != 1500) {
+        // ⭐ Auto-detect or set MTU
+        if (m_config.mtu == 0) {
+            // Auto-detect MTU
+            std::cout << "[DirettaRenderer] Auto-detecting optimal MTU..." << std::endl;
+            uint32_t detectedMTU = 0;
+            if (m_direttaOutput->detectAndSetMTU(detectedMTU)) {
+                m_networkMTU = detectedMTU;
+                std::cout << "[DirettaRenderer] ✓ Auto-detected MTU: " << m_networkMTU << " bytes" << std::endl;
+            } else {
+                // Fallback to safe default
+                m_networkMTU = 1500;
+                std::cout << "[DirettaRenderer] ⚠️  MTU detection failed, using safe default: " 
+                          << m_networkMTU << " bytes" << std::endl;
+                m_direttaOutput->setMTU(m_networkMTU);
+            }
+        } else {
+            // Use manually configured MTU
+            m_networkMTU = m_config.mtu;
+            std::cout << "[DirettaRenderer] Using manually configured MTU: " 
+                      << m_networkMTU << " bytes" << std::endl;
             m_direttaOutput->setMTU(m_networkMTU);
         }
+        std::cout << "[DirettaRenderer] " << std::endl;
         
         // Create other components
         UPnPDevice::Config upnpConfig;
