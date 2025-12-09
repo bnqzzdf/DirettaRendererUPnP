@@ -386,14 +386,53 @@ bool DirettaOutput::sendAudio(const uint8_t* data, size_t numSamples) {
                       << " samples → " << dataSize << " bytes" << std::endl;
         }
     } else {
-        // PCM: standard calculation
-        uint32_t bytesPerSample = (m_currentFormat.bitDepth / 8) * m_currentFormat.channels;
-        dataSize = numSamples * bytesPerSample;
+        // ✅ PCM: Calculate based on ACTUAL format (not what we'll send)
+        // For 24-bit: input is S32 (4 bytes), output will be S24 (3 bytes)
+        uint32_t inputBytesPerSample = (m_currentFormat.bitDepth == 24) ? 4 : (m_currentFormat.bitDepth / 8);
+        inputBytesPerSample *= m_currentFormat.channels;
+        
+        // Output size (what we'll actually send to Diretta)
+        uint32_t outputBytesPerSample = (m_currentFormat.bitDepth / 8) * m_currentFormat.channels;
+        dataSize = numSamples * outputBytesPerSample;
     }
     
     DIRETTA::Stream stream;
     stream.resize(dataSize);
-    memcpy(stream.get(), data, dataSize);
+    
+    // ✅ CRITICAL FIX: Convert S32 → S24 if needed
+    if (!m_currentFormat.isDSD && m_currentFormat.bitDepth == 24) {
+        // Input: S32 (4 bytes per sample)
+        // Output: S24 (3 bytes per sample)
+        const int32_t* input32 = reinterpret_cast<const int32_t*>(data);
+        uint8_t* output24 = stream.get();
+        
+        size_t totalSamples = numSamples * m_currentFormat.channels;
+        
+        for (size_t i = 0; i < totalSamples; i++) {
+            int32_t sample32 = input32[i];
+            
+            // Extract 24 significant bits from 32-bit container
+            // S32 format: [LSB] [24-bit audio] [MSB in byte 3]
+            // We want bytes 1, 2, 3 (shift right by 8 bits)
+            int32_t sample24 = sample32 >> 8;
+            
+            // Write as 3 bytes (little-endian)
+            output24[0] = (sample24 >> 0) & 0xFF;   // LSB
+            output24[1] = (sample24 >> 8) & 0xFF;   // Mid
+            output24[2] = (sample24 >> 16) & 0xFF;  // MSB
+            
+            output24 += 3;
+        }
+        
+        static int conversionLog = 0;
+        if (conversionLog++ < 3) {
+            std::cout << "[DirettaOutput] ✅ Converted S32 → S24 (" 
+                      << totalSamples << " samples)" << std::endl;
+        }
+    } else {
+        // For other formats (16-bit, 32-bit, DSD): direct copy
+        memcpy(stream.get(), data, dataSize);
+    }
     
     m_syncBuffer->setStream(stream);
     m_totalSamplesSent += numSamples;
@@ -657,56 +696,147 @@ void DirettaOutput::listAvailableTargets() {
 }
 
 bool DirettaOutput::verifyTargetAvailable() {
+    const int MAX_RETRIES = 3;
+    const int RETRY_DELAY_SECONDS = 5;
+    
+    std::cout << "[DirettaOutput] " << std::endl;
     std::cout << "[DirettaOutput] Scanning for Diretta targets..." << std::endl;
+    std::cout << "[DirettaOutput] This may take several seconds per attempt" << std::endl;
+    std::cout << "[DirettaOutput] " << std::endl;
     
     DIRETTA::Find::Setting findSetting;
     findSetting.Loopback = false;
     findSetting.ProductID = 0;
     
-    DIRETTA::Find find(findSetting);
-    
-    std::cout << "[DirettaOutput] Opening Diretta Find on all network interfaces..." << std::endl;
-    if (!find.open()) {
-        std::cerr << "[DirettaOutput] ❌ Failed to initialize Diretta Find" << std::endl;
-        std::cerr << "[DirettaOutput] This usually means:" << std::endl;
-        std::cerr << "[DirettaOutput]   1. Insufficient permissions (need root/sudo)" << std::endl;
-        std::cerr << "[DirettaOutput]   2. Network interface is down" << std::endl;
-        std::cerr << "[DirettaOutput]   3. Firewall blocking UDP multicast" << std::endl;
-        return false;
-    }
-    
-    std::cout << "[DirettaOutput] Scanning network (this may take a few seconds)..." << std::endl;
-    DIRETTA::Find::PortResalts targets;
-    if (!find.findOutput(targets)) {
-        std::cerr << "[DirettaOutput] ❌ Failed to scan for targets" << std::endl;
-        std::cerr << "[DirettaOutput] findOutput() returned false - this could mean:" << std::endl;
-        std::cerr << "[DirettaOutput]   1. No response from any targets (timeout)" << std::endl;
-        std::cerr << "[DirettaOutput]   2. Targets are on a different subnet" << std::endl;
-        std::cerr << "[DirettaOutput]   3. Network discovery is blocked" << std::endl;
-        return false;
-    }
-    
-    if (targets.empty()) {
-        std::cerr << "[DirettaOutput] ❌ No Diretta targets found on network" << std::endl;
-        return false;
-    }
-    
-    std::cout << "[DirettaOutput] ✓ Found " << targets.size() << " Diretta target(s)" << std::endl;
-    
-    // If specific target index is requested, verify it's in range
-    if (m_targetIndex >= 0) {
-        if (m_targetIndex >= static_cast<int>(targets.size())) {
-            std::cerr << "[DirettaOutput] ❌ Target index " << (m_targetIndex + 1) 
-                      << " is out of range (only " << targets.size() << " target(s) found)" << std::endl;
-            std::cerr << "[DirettaOutput] Please run --list-targets to see available targets" << std::endl;
-            return false;
+    for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        if (attempt > 1) {
+            std::cout << "[DirettaOutput] " << std::endl;
+            std::cout << "[DirettaOutput] 🔄 Retry " << attempt << "/" << MAX_RETRIES << "..." << std::endl;
         }
-        std::cout << "[DirettaOutput] ✓ Target #" << (m_targetIndex + 1) << " is available" << std::endl;
-    } else if (targets.size() > 1) {
-        std::cout << "[DirettaOutput] 💡 Multiple targets detected. Interactive selection will be used." << std::endl;
+        
+        // Create new Find object for each attempt (important!)
+        DIRETTA::Find find(findSetting);
+        
+        std::cout << "[DirettaOutput] Opening Diretta Find on all network interfaces";
+        std::cout.flush();
+        
+        if (!find.open()) {
+            std::cerr << " ❌" << std::endl;
+            std::cerr << "[DirettaOutput] Failed to initialize Diretta Find" << std::endl;
+            
+            if (attempt >= MAX_RETRIES) {
+                std::cerr << "[DirettaOutput] " << std::endl;
+                std::cerr << "[DirettaOutput] This usually means:" << std::endl;
+                std::cerr << "[DirettaOutput]   1. Insufficient permissions (need root/sudo)" << std::endl;
+                std::cerr << "[DirettaOutput]   2. Network interface is down" << std::endl;
+                std::cerr << "[DirettaOutput]   3. Firewall blocking UDP multicast" << std::endl;
+                return false;
+            }
+            
+            std::this_thread::sleep_for(std::chrono::seconds(RETRY_DELAY_SECONDS));
+            continue;
+        }
+        
+        std::cout << " ✓" << std::endl;
+        std::cout << "[DirettaOutput] Scanning network";
+        std::cout.flush();
+        
+        // Visual feedback during scan (SDK blocks here)
+        auto scanStart = std::chrono::steady_clock::now();
+        
+        DIRETTA::Find::PortResalts targets;
+        bool scanSuccess = find.findOutput(targets);
+        
+        auto scanEnd = std::chrono::steady_clock::now();
+        auto scanDuration = std::chrono::duration_cast<std::chrono::milliseconds>(scanEnd - scanStart);
+        
+        std::cout << " (took " << scanDuration.count() << "ms)";
+        
+        if (!scanSuccess) {
+            std::cout << " ⚠️" << std::endl;
+            std::cerr << "[DirettaOutput] findOutput() returned false" << std::endl;
+            
+            if (attempt >= MAX_RETRIES) {
+                std::cerr << "[DirettaOutput] " << std::endl;
+                std::cerr << "[DirettaOutput] This could mean:" << std::endl;
+                std::cerr << "[DirettaOutput]   1. No response from any targets (timeout)" << std::endl;
+                std::cerr << "[DirettaOutput]   2. Targets are on a different subnet" << std::endl;
+                std::cerr << "[DirettaOutput]   3. Network discovery is blocked" << std::endl;
+                return false;
+            }
+            
+            std::cout << "[DirettaOutput] No response, retrying..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(RETRY_DELAY_SECONDS));
+            continue;
+        }
+        
+        if (targets.empty()) {
+            std::cout << " ⚠️" << std::endl;
+            std::cerr << "[DirettaOutput] Scan succeeded but no targets found" << std::endl;
+            
+            if (attempt >= MAX_RETRIES) {
+                std::cerr << "[DirettaOutput] " << std::endl;
+                std::cerr << "[DirettaOutput] ❌ No Diretta targets found after " 
+                          << MAX_RETRIES << " attempts" << std::endl;
+                std::cerr << "[DirettaOutput] Please ensure:" << std::endl;
+                std::cerr << "[DirettaOutput]   1. Diretta Target is powered on and running" << std::endl;
+                std::cerr << "[DirettaOutput]   2. Target is on the same network/VLAN" << std::endl;
+                std::cerr << "[DirettaOutput]   3. Network allows multicast/broadcast" << std::endl;
+                return false;
+            }
+            
+            std::cout << "[DirettaOutput] Target may still be initializing, retrying..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(RETRY_DELAY_SECONDS));
+            continue;
+        }
+        
+        // SUCCESS!
+        std::cout << " ✓" << std::endl;
+        std::cout << "[DirettaOutput] " << std::endl;
+        std::cout << "[DirettaOutput] ✅ Found " << targets.size() << " Diretta target(s)";
+        if (attempt > 1) {
+            std::cout << " (after " << attempt << " attempt(s))";
+        }
+        std::cout << std::endl;
+        std::cout << "[DirettaOutput] " << std::endl;
+        
+        // ⭐ CORRECTION: Itérer sur la map avec un itérateur
+        int targetNum = 1;
+        for (const auto& targetPair : targets) {
+            const auto& targetInfo = targetPair.second;
+            std::cout << "[DirettaOutput] Target #" << targetNum << ": " 
+          << targetInfo.targetName << std::endl;
+            targetNum++;
+        }
+        std::cout << "[DirettaOutput] " << std::endl;
+        
+        // If specific target index is requested, verify it's in range
+        if (m_targetIndex >= 0) {
+            if (m_targetIndex >= static_cast<int>(targets.size())) {
+                std::cerr << "[DirettaOutput] ❌ Target index " << (m_targetIndex + 1) 
+                          << " is out of range (only " << targets.size() << " target(s) found)" << std::endl;
+                std::cerr << "[DirettaOutput] Please run --list-targets to see available targets" << std::endl;
+                return false;
+            }
+            
+            // ⭐ CORRECTION: Trouver la target à l'index demandé
+            auto it = targets.begin();
+            std::advance(it, m_targetIndex);
+            const auto& targetInfo = it->second;
+            
+            std::cout << "[DirettaOutput] ✓ Will use target #" << (m_targetIndex + 1) 
+          << " (" << targetInfo.targetName << ")" << std::endl;
+            std::cout << "[DirettaOutput] " << std::endl;
+        } else if (targets.size() > 1) {
+            std::cout << "[DirettaOutput] 💡 Multiple targets detected. Interactive selection will be used." << std::endl;
+            std::cout << "[DirettaOutput] " << std::endl;
+        }
+        
+        return true;
     }
     
-    return true;
+    // Should never reach here (all retry paths return above)
+    return false;
 }
 
 bool DirettaOutput::configureDiretta(const AudioFormat& format) {
@@ -811,7 +941,7 @@ bool DirettaOutput::configureDiretta(const AudioFormat& format) {
     // ===== SYNCBUFFER SETUP (SinHost order) =====
     std::cout << "[DirettaOutput] 1. Opening..." << std::endl;
     m_syncBuffer->open(
-        DIRETTA::Sync::THRED_MODE(5),
+        DIRETTA::Sync::THRED_MODE(1),
         ACQUA::Clock::MilliSeconds(100),
         0, "DirettaRenderer", 0, 0, 0, 0,
         DIRETTA::Sync::MSMODE_AUTO

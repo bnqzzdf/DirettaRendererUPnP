@@ -16,6 +16,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ---
+## [1.0.4]
+ ### Fixed
+  **Audio**
+  - Correct PCM data size calculation and convert S32 to S24 format
+  - Improving the detection of actual bit depth from the audio source
+  - Fixed detection of actual bit depth from audio source
+  - Detect real bit depth from source instead of relying on FFmpeg's internal format
+  - Adjust sync buffer thread mode to improve performance (thanks to herisson88)
+ **Diretta Target**
+  - Increase retry delay for target availability verification from 2 to 5 seconds
+  - Update target information display to use targetName instead of Device
+  - Correct iteration over targets and target selection by index
+ **Systemd**
+  - Update service management instructions in installation script
+  - Improve binary detection and installation instructions in the systemd script
+ ### Add
+  **Diretta Target**
+  - Implement retry mechanism for target discovery with detailed feedback
+  **Systemd**
+  - Update service management instructions in installation script
+  - Add a uninstall script for diretta-renderer.service
+  - Add systemd service and configuration for Diretta UPnP Renderer
 
 ## [1.0.3] - 2025-12-07
  ### Added

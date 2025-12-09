@@ -360,61 +360,7 @@ Press `Ctrl+C` to stop gracefully.
 
 ## Creating a Systemd Service
 
-To simplify deployment, this project provides a helper script `generate_service.sh` that creates a ready-to-use systemd service.
-
-### 1. Generate the Service File
-
-From the project root directory:
-
-```bash
-# Make the script executable
-chmod +x ./generate_service.sh
-
-# Generate the service with default parameters
-# - TARGET_INDEX=1 (first Diretta target)
-# - UPNP_PORT=4005
-# - BUFFER_SECS=2.0
-sudo ./generate_service.sh
-
-# Or override parameters in one line
-sudo TARGET_INDEX=2 UPNP_PORT=4005 BUFFER_SECS=2.0 ./generate_service.sh
-```
-
-This will create `/etc/systemd/system/diretta-renderer.service` with a command similar to:
-
-```ini
-ExecStart=/root/diretta/DirettaRendererUPnP/bin/DirettaRendererUPnP --target 1 --port 4005 --buffer 2.0
-```
-
-### 2. Enable and Start Service
-
-```bash
-# Reload systemd
-sudo systemctl daemon-reload
-
-# Enable at boot
-sudo systemctl enable diretta-renderer
-
-# Start now
-sudo systemctl start diretta-renderer
-
-# Check status
-sudo systemctl status diretta-renderer
-```
-
-### 3. View Logs
-
-```bash
-# Follow logs in real-time
-sudo journalctl -u diretta-renderer -f
-
-# View recent logs
-sudo journalctl -u diretta-renderer -n 100
-
-# View logs from today
-sudo journalctl -u diretta-renderer --since today
-```
-
+See [SYSTEM_GUIDE](SYSTEMD_GUIDE.md)
 ---
 
 ## Listing and Selecting Diretta Targets

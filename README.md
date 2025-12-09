@@ -60,38 +60,41 @@ Diretta is a proprietary audio streaming protocol developed by Yu Harada that en
 ### Complete Signal Path
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         AUDIO STREAMING PATH                             │
-└─────────────────────────────────────────────────────────────────────────┘
-
-    UPnP Control Point              Diretta Renderer              Diretta Target              DAC
-    (JPlay, BubbleUPnP)          (This Application)          (Memory Play, etc.)        (Holo, etc.)
-          │                              │                           │                      │
-          │  ① UPnP Commands             │                           │                      │
-          │  (Play/Stop/Seek)            │                           │                      │
-          ├─────────────────────────────>│                           │                      │
-          │                              │                           │                      │
-          │  ② HTTP Audio Stream         │                           │                      │
-          │  (FLAC/WAV/DSD from          │                           │                      │
-          │   media server)              │                           │                      │
-          ├─────────────────────────────>│                           │                      │
-          │                              │                           │                      │
-          │                              │  ③ Diretta Protocol       │                      │
-          │                              │  (Bit-perfect PCM/DSD)    │                      │
-          │                              │  via Ethernet (IPV6)      │                      │
-          │                              ├──────────────────────────>│                      │
-          │                              │                           │                      │
-          │                              │                           │  ④ Audio Output      │
-          │                              │                           │  (USB/I2S/SPDIF)     │
-          │                              │                           ├─────────────────────>│
-          │                              │                           │                      │
-          │                              │                           │                   ┌──┴──┐
-          │                              │                           │                   │ D/A │
-          │                              │                           │                   └──┬──┘
-          │                              │                           │                      │
-          │                              │                           │                   Analog
-          │                              │                           │                    Audio
-          ▼                              ▼                           ▼                      ▼
+┌─────────────────────────┐
+│  UPnP Control Point     │  (JPlay, BubbleUPnP, etc.)
+│  (Phone/Tablet/PC)      │
+└───────────┬─────────────┘
+            │ UPnP/DLNA Protocol
+            ▼
+┌─────────────────────────┐
+│  Diretta UPnP Renderer  │
+│  ┌───────────────────┐  │
+│  │  UPnP Device      │  │  Handles UPnP protocol
+│  ├───────────────────┤  │
+│  │  AudioEngine      │  │  Manages playback, FFmpeg decoding
+│  ├───────────────────┤  │
+│  │  DirettaOutput    │  │  Interfaces with Diretta SDK
+│  └───────────────────┘  │
+└───────────┬─────────────┘
+            │ Diretta Protocol (UDP/Ethernet)
+            │ Bit-perfect audio samples
+            ▼
+┌─────────────────────────┐
+│     Diretta TARGET      │  
+│  - Receives packets     │
+│  - Clock synchronization│
+│                         │
+└───────────┬─────────────┘
+            |
+            |
+            ▼
+┌─────────────────────────┐
+│          DAC            │  
+│  - D/A conversion       │
+└───────────┬─────────────┘
+            │
+            ▼
+        🔊 Speakers
 ```
 
 ### Component Details
@@ -200,6 +203,22 @@ make VARIANT=15zen4    # AMD Zen 4 optimized
 make NOLOG=1           # Production build (no debug logs)
 make list-variants     # Show all available options
 ```
+## Platform Support
+
+### Officially Supported ✅
+- **Linux x64** (Fedora, Ubuntu, Arch, AudioLinux)
+- **Linux ARM64** (Raspberry Pi 4/5)
+
+### Not Supported ❌
+- **Windows**: No native Windows version planned
+- **macOS**: Not tested, may work with modifications
+
+### Why Linux only?
+This is a personal project maintained by one developer in their free time. 
+Supporting multiple platforms would require significant additional effort 
+for development, testing, and user support.
+
+**Community contributions welcome**, but Windows/macOS support is not a priority.
 
 ### Hardware
 - **Minimum**: Dual-core CPU, 1GB RAM, Gigabit Ethernet
@@ -261,10 +280,29 @@ cd DirettaRendererUPnP
 # Build (Makefile auto-detects SDK location)
 make
 
-# Or use install script
-chmod +x install.sh
-sudo ./install.sh
-```
+# Install service
+cd systemd
+chmod +x install-systemd.sh
+sudo ./install-systemd.sh
+
+#Next steps:
+ 1. Edit configuration (optional):
+     sudo nano /opt/diretta-renderer-upnp/diretta-renderer.conf
+ 2. Reload daemon:
+     sudo systemctl daemon-reload
+ 3. Enable the service:
+     sudo systemctl enable diretta-renderer
+ 4. Start the service:
+     sudo systemctl start diretta-renderer
+ 5. Check status:
+     sudo systemctl status diretta-renderer 
+ 6. View logs:
+     sudo journalctl -u diretta-renderer -f
+ 7. Stop the service:
+     sudo systemctl stop diretta-renderer
+ 8. Disable auto-start:
+     sudo systemctl disable diretta-renderer       
+
 
 ### 4. Configure Network
 
@@ -522,6 +560,21 @@ For more solutions, see the [Troubleshooting Guide](docs/TROUBLESHOOTING.md).
 ### Q: What's better than a regular UPnP renderer?
 **A:** This renderer bypasses the OS audio stack by using the Diretta protocol. The audio goes directly from network to your Diretta Target to DAC, maintaining bit-perfect quality.
 
+### Q: Will there be a Windows version?
+**A:** No, Windows support is not planned. This is a one-person project and 
+I prefer to focus on making the Linux version excellent. 
+
+You can use **WSL2** to run the renderer on Windows, or consider dual-booting Linux.
+
+### Q: Can I pay for Windows support?
+**A:** Even with funding, I don't have the time to properly support Windows. 
+If you're interested in a Windows port, consider hiring a developer to fork 
+the project.
+
+### Q: Why is this free if it costs you time/money?
+**A:** I built this for myself and the audiophile community. It's a passion 
+project, not a business. However, if you find it valuable, see the "Support" 
+section below.
 ---
 
 ## Roadmap
@@ -536,6 +589,23 @@ For more solutions, see the [Troubleshooting Guide](docs/TROUBLESHOOTING.md).
 
 ---
 
+## ❤️ Support This Project
+
+If you find this renderer valuable, you can support development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/cometdom)
+
+**Important notes:**
+- ✅ Donations are **optional** and appreciated
+- ✅ Help cover test equipment and coffee ☕
+- ❌ **No guarantees** for features, support, or timelines
+- ❌ The project remains free and open source for everyone
+
+This is a hobby project - donations support development but don't create obligations.
+
+Thank you! 🎵
+
+---
 ## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for:
@@ -588,4 +658,4 @@ This software is provided "as is" without warranty. While designed for high-qual
 
 **Enjoy bit-perfect, high-resolution audio streaming! 🎵**
 
-*Last updated: 2025-12-05*
+*Last updated: 2025-12-09*
