@@ -155,13 +155,6 @@ public:
     void setMTU(uint32_t mtu);
     
     /**
-     * @brief Detect optimal MTU from target and set it
-     * @param detectedMTU Output parameter for detected MTU value
-     * @return true if detection successful, false otherwise
-     */
-    bool detectAndSetMTU(uint32_t& detectedMTU);
-    
-    /**
      * @brief Get current MTU setting
      * @return MTU value in bytes
      */
