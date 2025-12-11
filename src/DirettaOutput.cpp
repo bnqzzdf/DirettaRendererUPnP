@@ -181,15 +181,14 @@ void DirettaOutput::stop(bool immediate) {
             int drain_waited_ms = 0;
             
             while (drain_waited_ms < drain_timeout_ms) {
-                size_t queued = m_syncBuffer->getSyncQueue();
-                
-                if (queued == 0) {
+                if (m_syncBuffer->buffer_empty()) {
                     std::cout << "[DirettaOutput] ✓ Buffers drained" << std::endl;
                     break;
                 }
                 
                 if (drain_waited_ms % 200 == 0) {
-                    std::cout << "[DirettaOutput]    Waiting... (" << queued << " buffers)" << std::endl;
+                    size_t buffered = m_syncBuffer->getLastBufferCount();
+                    std::cout << "[DirettaOutput]    Waiting... (" << buffered << " samples buffered)" << std::endl;
                 }
                 
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -294,21 +293,20 @@ bool DirettaOutput::changeFormat(const AudioFormat& newFormat) {
         int drain_waited_ms = 0;
         
         // Get initial buffer count
-        size_t initialQueued = m_syncBuffer->getSyncQueue();
-        std::cout << "[DirettaOutput]    Initial queued buffers: " << initialQueued << std::endl;
+        size_t initialBuffered = m_syncBuffer->getLastBufferCount();
+        std::cout << "[DirettaOutput]    Initial buffered samples: " << initialBuffered << std::endl;
         
-        // Wait until all buffers are consumed
+        // Wait until buffer is empty
         while (drain_waited_ms < drain_timeout_ms) {
-            size_t queued = m_syncBuffer->getSyncQueue();
-            
-            if (queued == 0) {
+            if (m_syncBuffer->buffer_empty()) {
                 std::cout << "[DirettaOutput]    ✓ All buffers drained!" << std::endl;
                 break;
             }
             
             // Log progress every 200ms
             if (drain_waited_ms % 200 == 0) {
-                std::cout << "[DirettaOutput]    Waiting... (" << queued << " buffers remaining)" << std::endl;
+                size_t buffered = m_syncBuffer->getLastBufferCount();
+                std::cout << "[DirettaOutput]    Waiting... (" << buffered << " samples remaining)" << std::endl;
             }
             
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -316,9 +314,9 @@ bool DirettaOutput::changeFormat(const AudioFormat& newFormat) {
         }
         
         if (drain_waited_ms >= drain_timeout_ms) {
-            size_t remainingQueued = m_syncBuffer->getSyncQueue();
-            std::cerr << "[DirettaOutput]    ⚠️  DRAIN TIMEOUT! " << remainingQueued 
-                      << " buffers still queued after " << drain_timeout_ms << "ms" << std::endl;
+            size_t remainingBuffered = m_syncBuffer->getLastBufferCount();
+            std::cerr << "[DirettaOutput]    ⚠️  DRAIN TIMEOUT! " << remainingBuffered 
+                      << " samples still buffered after " << drain_timeout_ms << "ms" << std::endl;
             std::cerr << "[DirettaOutput]    Forcing immediate disconnect..." << std::endl;
             // Force immediate disconnect to avoid pink noise
             m_syncBuffer->pre_disconnect(true);
@@ -363,7 +361,6 @@ bool DirettaOutput::changeFormat(const AudioFormat& newFormat) {
     
     return true;
 }
-
 bool DirettaOutput::sendAudio(const uint8_t* data, size_t numSamples) {
     if (!m_connected || !m_playing) {
         return false;
