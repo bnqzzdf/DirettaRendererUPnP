@@ -174,6 +174,34 @@ void DirettaOutput::stop(bool immediate) {
     std::cout << "[DirettaOutput] 🛑 Stopping (immediate=" << immediate << ")..." << std::endl;
     
     if (m_syncBuffer) {
+        if (!immediate) {
+            // ⭐ DRAIN buffers before stopping (graceful stop)
+            std::cout << "[DirettaOutput] Draining buffers before stop..." << std::endl;
+            int drain_timeout_ms = 5000;
+            int drain_waited_ms = 0;
+            
+            while (drain_waited_ms < drain_timeout_ms) {
+                size_t queued = m_syncBuffer->getSyncQueue();
+                
+                if (queued == 0) {
+                    std::cout << "[DirettaOutput] ✓ Buffers drained" << std::endl;
+                    break;
+                }
+                
+                if (drain_waited_ms % 200 == 0) {
+                    std::cout << "[DirettaOutput]    Waiting... (" << queued << " buffers)" << std::endl;
+                }
+                
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                drain_waited_ms += 50;
+            }
+            
+            if (drain_waited_ms >= drain_timeout_ms) {
+                std::cerr << "[DirettaOutput] ⚠️  Drain timeout, forcing immediate stop" << std::endl;
+                immediate = true;  // Force immediate if timeout
+            }
+        }
+        
         std::cout << "[DirettaOutput] Calling pre_disconnect(" << immediate << ")..." << std::endl;
         auto start = std::chrono::steady_clock::now();
         
@@ -186,16 +214,15 @@ void DirettaOutput::stop(bool immediate) {
         m_syncBuffer->seek_front();
         std::cout << "[DirettaOutput] ✓ Buffer reset to front" << std::endl;
     } else {
-        std::cout << "[DirettaOutput] ⭐ m_totalSamplesSent RESET to 0" << std::endl;  // ⭐ Log pour vérifier
         std::cout << "[DirettaOutput] ⚠️  No SyncBuffer to disconnect" << std::endl;
- }
-    
+    }
     
     m_playing = false;
     m_isPaused = false;      // Reset état pause
     m_pausedPosition = 0;    // Reset position sauvegardée
     m_totalSamplesSent = 0;
-
+    std::cout << "[DirettaOutput] ⭐ m_totalSamplesSent RESET to 0" << std::endl;
+    
     std::cout << "[DirettaOutput] ✓ Stopped" << std::endl;
 }
 
@@ -255,42 +282,84 @@ bool DirettaOutput::changeFormat(const AudioFormat& newFormat) {
         return true;
     }
     
-    std::cout << "[DirettaOutput] ⚠️  Format change during playback" << std::endl;
-    std::cout << "[DirettaOutput] Draining buffer..." << std::endl;
+    std::cout << "[DirettaOutput] ⚠️  Format change during playback - CRITICAL DRAIN REQUIRED" << std::endl;
     
     if (m_syncBuffer) {
-        m_syncBuffer->pre_disconnect(false); // Drain
-
-    
-        // ⭐ ATTENDRE que le buffer soit vide
-        std::cout << "[DirettaOutput] Waiting for buffer drain..." << std::endl;
-        int timeout_ms = 5000;
-        int waited_ms = 0;
-        while (m_syncBuffer->is_connect() && waited_ms < timeout_ms) {
+        // ⭐ STEP 1: STOP SENDING NEW DATA (caller must stop feeding audio)
+        std::cout << "[DirettaOutput] 1. Stop sending new audio data..." << std::endl;
+        
+        // ⭐ STEP 2: WAIT FOR ALL QUEUED BUFFERS TO BE PLAYED
+        std::cout << "[DirettaOutput] 2. Draining queued buffers..." << std::endl;
+        int drain_timeout_ms = 10000;  // 10 seconds max for drain
+        int drain_waited_ms = 0;
+        
+        // Get initial buffer count
+        size_t initialQueued = m_syncBuffer->getSyncQueue();
+        std::cout << "[DirettaOutput]    Initial queued buffers: " << initialQueued << std::endl;
+        
+        // Wait until all buffers are consumed
+        while (drain_waited_ms < drain_timeout_ms) {
+            size_t queued = m_syncBuffer->getSyncQueue();
+            
+            if (queued == 0) {
+                std::cout << "[DirettaOutput]    ✓ All buffers drained!" << std::endl;
+                break;
+            }
+            
+            // Log progress every 200ms
+            if (drain_waited_ms % 200 == 0) {
+                std::cout << "[DirettaOutput]    Waiting... (" << queued << " buffers remaining)" << std::endl;
+            }
+            
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            waited_ms += 50;
+            drain_waited_ms += 50;
         }
         
-        if (waited_ms >= timeout_ms) {
-            std::cerr << "[DirettaOutput] ⚠️  Drain timeout!" << std::endl;
+        if (drain_waited_ms >= drain_timeout_ms) {
+            size_t remainingQueued = m_syncBuffer->getSyncQueue();
+            std::cerr << "[DirettaOutput]    ⚠️  DRAIN TIMEOUT! " << remainingQueued 
+                      << " buffers still queued after " << drain_timeout_ms << "ms" << std::endl;
+            std::cerr << "[DirettaOutput]    Forcing immediate disconnect..." << std::endl;
+            // Force immediate disconnect to avoid pink noise
+            m_syncBuffer->pre_disconnect(true);
         } else {
-            std::cout << "[DirettaOutput] ✓ Buffer drained in " << waited_ms << "ms" << std::endl;
+            std::cout << "[DirettaOutput]    ✓ Buffer drained in " << drain_waited_ms << "ms" << std::endl;
+            
+            // ⭐ STEP 3: GRACEFUL DISCONNECT
+            std::cout << "[DirettaOutput] 3. Graceful disconnect..." << std::endl;
+            m_syncBuffer->pre_disconnect(false);
         }
+        
+        // ⭐ STEP 4: WAIT FOR HARDWARE STABILIZATION
+        std::cout << "[DirettaOutput] 4. Waiting for hardware stabilization (200ms)..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        
+        // ⭐ STEP 5: RESET BUFFER POSITION
+        std::cout << "[DirettaOutput] 5. Resetting buffer position..." << std::endl;
+        m_syncBuffer->seek_front();
     }
 
-
-
+    // ⭐ STEP 6: RECONFIGURE WITH NEW FORMAT
+    std::cout << "[DirettaOutput] 6. Configuring new format..." << std::endl;
     if (!configureDiretta(newFormat)) {
         std::cerr << "[DirettaOutput] ❌ Failed to reconfigure" << std::endl;
         return false;
     }
     
+    // ⭐ STEP 7: RESTART PLAYBACK IF NEEDED
     if (m_playing) {
+        std::cout << "[DirettaOutput] 7. Restarting playback..." << std::endl;
         m_syncBuffer->play();
+        
+        // Wait for DAC to lock onto new format
+        std::cout << "[DirettaOutput]    Waiting for DAC lock (200ms)..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
     
     m_currentFormat = newFormat;
-    std::cout << "[DirettaOutput] ✓ Format changed successfully" << std::endl;
+    m_totalSamplesSent = 0;  // Reset counter for new format
+    
+    std::cout << "[DirettaOutput] ✅ Format changed successfully" << std::endl;
     
     return true;
 }
