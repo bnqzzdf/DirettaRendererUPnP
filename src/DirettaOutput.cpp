@@ -853,17 +853,17 @@ bool DirettaOutput::configureDiretta(const AudioFormat& format) {
         // ✅ Base DSD format - always use FMT_DSD1 and FMT_DSD_SIZ_32
         formatID = DIRETTA::FormatID::FMT_DSD1 | DIRETTA::FormatID::FMT_DSD_SIZ_32;
         
-        // ✅ WORKAROUND: Always send as DSF to DAC
-        // DFF support via Diretta SDK requires specific handling not yet implemented
-        // We convert DFF → DSF in AudioEngine before sending to DAC
-        formatID |= DIRETTA::FormatID::FMT_DSD_LSB;     // LSB First (DSF)
-        formatID |= DIRETTA::FormatID::FMT_DSD_LITTLE;  // Little Endian (DSF)
-        
-        if (format.dsdFormat == AudioFormat::DSDFormat::DFF) {
-            std::cout << "[DirettaOutput]    Format: DSF (LSB + LITTLE) [converted from DFF]" << std::endl;
-            std::cout << "[DirettaOutput]    ⚠️  Source is DFF, converted to DSF in AudioEngine" << std::endl;
-        } else {
+        // ✅ CRITICAL FIX: Detect DSF vs DFF format correctly
+        if (format.dsdFormat == AudioFormat::DSDFormat::DSF) {
+            // DSF: LSB first, Little Endian
+            formatID |= DIRETTA::FormatID::FMT_DSD_LSB;
+            formatID |= DIRETTA::FormatID::FMT_DSD_LITTLE;
             std::cout << "[DirettaOutput]    Format: DSF (LSB + LITTLE)" << std::endl;
+        } else {
+            // DFF: MSB first, Big Endian
+            formatID |= DIRETTA::FormatID::FMT_DSD_MSB;
+            formatID |= DIRETTA::FormatID::FMT_DSD_BIG;
+            std::cout << "[DirettaOutput]    Format: DFF (MSB + BIG)" << std::endl;
         }
         
         std::cout << "[DirettaOutput]    Word size: 32-bit container" << std::endl;
@@ -888,7 +888,7 @@ bool DirettaOutput::configureDiretta(const AudioFormat& format) {
             formatID |= DIRETTA::FormatID::RAT_44100 | DIRETTA::FormatID::RAT_MP64;
         }
     } else {
-        // PCM FORMAT (unchanged)
+        // PCM FORMAT (existing code - unchanged)
         switch (format.bitDepth) {
             case 16: formatID = DIRETTA::FormatID::FMT_PCM_SIGNED_16; break;
             case 24: formatID = DIRETTA::FormatID::FMT_PCM_SIGNED_24; break;
@@ -942,8 +942,7 @@ bool DirettaOutput::configureDiretta(const AudioFormat& format) {
         case 6: formatID |= DIRETTA::FormatID::CHA_6; break;
         case 8: formatID |= DIRETTA::FormatID::CHA_8; break;
         default: formatID |= DIRETTA::FormatID::CHA_2; break;
-    }
-    
+    }    
      // ===== SYNCBUFFER SETUP (SinHost order) =====
     std::cout << "[DirettaOutput] 1. Opening..." << std::endl;
     m_syncBuffer->open(
