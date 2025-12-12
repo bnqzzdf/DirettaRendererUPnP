@@ -988,6 +988,13 @@ AudioEngine::AudioEngine()
 
 AudioEngine::~AudioEngine() {
     stop();
+    waitForPreloadThread();
+}
+
+void AudioEngine::waitForPreloadThread() {
+    if (m_preloadThread.joinable()) {
+        m_preloadThread.join();
+    }
 }
 
 void AudioEngine::setAudioCallback(const AudioCallback& callback) {
@@ -1031,13 +1038,14 @@ void AudioEngine::setCurrentURI(const std::string& uri, const std::string& metad
 }
 
 void AudioEngine::setNextURI(const std::string& uri, const std::string& metadata) {
-    // NO MUTEX HERE - would cause deadlock with audio thread!
-    // setNextURI is called from UPnP thread while process() holds the mutex
-    m_nextURI = uri;
-    m_nextMetadata = metadata;
-    std::cout << "[AudioEngine] Next URI set (gapless)" << std::endl;
-    
-    // TODO: Preload next track in background
+    // Thread-safe: Use pending mechanism to defer to audio thread
+    {
+        std::lock_guard<std::mutex> pendingLock(m_pendingMutex);
+        m_pendingNextURI = uri;
+        m_pendingNextMetadata = metadata;
+    }
+    m_pendingNextTrack.store(true, std::memory_order_release);
+    std::cout << "[AudioEngine] Next URI queued (gapless)" << std::endl;
 }
 
 void AudioEngine::setTrackEndCallback(const TrackEndCallback& callback) {
@@ -1077,10 +1085,14 @@ bool AudioEngine::play() {
     m_isDraining = false;
     
     // Preload next track in background if set (for gapless)
-    if (!m_nextURI.empty() && !m_nextDecoder) {
-        std::thread([this]() {
+    // Use joinable thread instead of detached to prevent use-after-free
+    if (!m_nextURI.empty() && !m_nextDecoder && !m_preloadRunning.load(std::memory_order_acquire)) {
+        waitForPreloadThread();
+        m_preloadRunning.store(true, std::memory_order_release);
+        m_preloadThread = std::thread([this]() {
             preloadNextTrack();
-        }).detach();
+            m_preloadRunning.store(false, std::memory_order_release);
+        });
     }
     
     return true;
@@ -1091,9 +1103,20 @@ void AudioEngine::stop() {
     
     // Changer l'état SANS mutex (atomic)
     m_state.store(State::STOPPED);
-    
-    std::cout << "[AudioEngine] ✓ State changed to STOPPED (without mutex)" << std::endl;
-    
+
+    // Clear pending flags
+    m_pendingNextTrack.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> pendingLock(m_pendingMutex);
+        m_pendingNextURI.clear();
+        m_pendingNextMetadata.clear();
+    }
+
+    // Wait for preload thread before cleanup
+    waitForPreloadThread();
+
+    std::cout << "[AudioEngine] ✓ State changed to STOPPED" << std::endl;
+
     // CRITICAL: Nettoyer TOUT pour forcer réouverture au prochain play()
     std::unique_lock<std::mutex> lock(m_mutex, std::try_to_lock);
     if (lock.owns_lock()) {
@@ -1171,8 +1194,20 @@ bool AudioEngine::process(size_t samplesNeeded) {
     if (m_state.load() != State::PLAYING) {
         return false;
     }
-    
-    // ... reste du code inchangé ...    
+
+    // Apply pending next URI from UPnP thread
+    if (m_pendingNextTrack.load(std::memory_order_acquire)) {
+        {
+            std::lock_guard<std::mutex> pendingLock(m_pendingMutex);
+            m_nextURI = m_pendingNextURI;
+            m_nextMetadata = m_pendingNextMetadata;
+            m_pendingNextURI.clear();
+            m_pendingNextMetadata.clear();
+        }
+        m_pendingNextTrack.store(false, std::memory_order_release);
+        std::cout << "[AudioEngine] Pending next URI applied (gapless)" << std::endl;
+    }
+
     if (!m_currentDecoder) {
         return false;
     }    // ... reste du code ...    // Determine output format
