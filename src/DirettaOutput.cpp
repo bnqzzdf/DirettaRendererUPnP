@@ -72,14 +72,14 @@ bool DirettaOutput::open(const AudioFormat& format, int bufferSeconds) {
         
     } else if (!format.isCompressed) {
         // WAV/AIFF: Uncompressed PCM, minimal overhead (just format conversion)
-        effectiveBuffer = std::min(static_cast<float>(bufferSeconds), 1.0f);
+        effectiveBuffer = std::min(static_cast<float>(bufferSeconds), 0.8f);
         std::cout << "[DirettaOutput] ✓ Uncompressed PCM (WAV/AIFF): low-latency path" << std::endl;
         std::cout << "[DirettaOutput]   Buffer: " << effectiveBuffer 
                   << "s (similar to DSD!)" << std::endl;
         
     } else {
         // FLAC/ALAC/etc: Compressed, needs decoding buffer
-        effectiveBuffer = std::max(static_cast<float>(bufferSeconds), 2.0f);
+        effectiveBuffer = std::max(static_cast<float>(bufferSeconds), 0.8f);
         std::cout << "[DirettaOutput] ℹ️  Compressed PCM (FLAC/ALAC): decoding required" << std::endl;
         
         if (bufferSeconds < 2) {
