@@ -26,7 +26,7 @@
 // Logging system - Variable globale définie dans main.cpp
 // ============================================================================
 extern bool g_verbose;
-#define DEBUG_LOG(x) if (g_verbose) { std::cout << x); }
+#define DEBUG_LOG(x) if (g_verbose) { std::cout << x << std::endl; }
 
 
 // Generate stable UUID based on hostname
